@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+import httpx
 from PIL import Image, UnidentifiedImageError
 
 try:
@@ -23,6 +25,9 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 IMAGE_DIR = UPLOAD_DIR / "images"
 AUDIO_DIR = UPLOAD_DIR / "audio"
 DATABASE_PATH = BASE_DIR / "civicpulse.db"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_AUDIO_BUCKET = os.getenv("SUPABASE_AUDIO_BUCKET", "issue-audio")
 for directory in (IMAGE_DIR, AUDIO_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -63,11 +68,15 @@ def initialize_database() -> None:
                 longitude REAL NOT NULL,
                 image_file TEXT,
                 audio_file TEXT,
+                audio_url TEXT,
                 audio_transcript TEXT,
                 created_at TEXT NOT NULL
             )
             """
         )
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(incidents)")}
+        if "audio_url" not in columns:
+            connection.execute("ALTER TABLE incidents ADD COLUMN audio_url TEXT")
 
 
 initialize_database()
@@ -120,6 +129,23 @@ async def save_audio(upload: UploadFile) -> Path:
 def transcribe_audio(path: Path) -> str | None:
     if speech_recognition is None:
         return None
+
+
+async def upload_audio_to_supabase(path: Path) -> str | None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    object_path = f"{datetime.now(timezone.utc):%Y/%m}/{uuid.uuid4().hex}{path.suffix}"
+    endpoint = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_AUDIO_BUCKET}/{object_path}"
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": "audio/webm",
+        "x-upsert": "false",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(endpoint, content=path.read_bytes(), headers=headers)
+        response.raise_for_status()
+    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_AUDIO_BUCKET}/{object_path}"
     recognizer = speech_recognition.Recognizer()
     try:
         with speech_recognition.AudioFile(str(path)) as source:
@@ -153,6 +179,7 @@ async def create_incident(
 
     image_path = None
     audio_path = None
+    audio_url = None
     transcript = None
     try:
         if image is not None and image.filename:
@@ -160,6 +187,10 @@ async def create_incident(
         if audio is not None and audio.filename:
             audio_path = await save_audio(audio)
             transcript = transcribe_audio(audio_path)
+            try:
+                audio_url = await upload_audio_to_supabase(audio_path)
+            except httpx.HTTPError:
+                audio_url = None
     except ValueError as error:
         return {"ok": False, "error": str(error)}
 
@@ -176,6 +207,7 @@ async def create_incident(
         "longitude": longitude,
         "image_file": image_path.name if image_path else None,
         "audio_file": audio_path.name if audio_path else None,
+        "audio_url": audio_url,
         "audio_transcript": transcript,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -184,8 +216,8 @@ async def create_incident(
             """
             INSERT INTO incidents (
                 ticket_id, status, name, phone, address, category, description,
-                latitude, longitude, image_file, audio_file, audio_transcript, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                latitude, longitude, image_file, audio_file, audio_url, audio_transcript, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             tuple(record.values()),
         )

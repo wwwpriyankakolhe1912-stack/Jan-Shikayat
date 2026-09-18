@@ -28,4 +28,18 @@ Voice transcription is optional. `SpeechRecognition` returns a transcript when t
 
 The current upload folder is local to the server. For production, replace it with S3, Supabase Storage, or a persistent disk before storing important citizen media.
 
-Incident records are stored in the local SQLite database `civicpulse.db`. The API provides `GET /api/incidents?limit=25` for reading recent reports. A hosted deployment needs persistent disk or a managed database so records survive redeploys.
+Incident records are stored in the local SQLite database `civicpulse.db`. Audio is saved locally under `uploads/audio` and its filename is stored in SQLite by default. The API provides `GET /api/incidents?limit=25` for reading recent reports.
+
+## Optional Supabase audio storage
+
+Create a public Supabase Storage bucket named `issue-audio`, then set these server-side environment variables:
+
+```powershell
+$env:SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY = "YOUR_SERVER_ONLY_SERVICE_ROLE_KEY"
+$env:SUPABASE_AUDIO_BUCKET = "issue-audio"
+```
+
+With those values configured, each uploaded voice note is sent to Supabase Storage and the resulting `audio_url` is saved in SQLite. Never expose the service-role key in browser JavaScript. If the variables are absent or Supabase is unavailable, the app keeps the local audio file and leaves `audio_url` empty.
+
+A hosted deployment needs persistent disk or a managed database so local records survive redeploys.
