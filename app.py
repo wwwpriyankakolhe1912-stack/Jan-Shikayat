@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import io
 import json
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 IMAGE_DIR = UPLOAD_DIR / "images"
 AUDIO_DIR = UPLOAD_DIR / "audio"
+DATABASE_PATH = BASE_DIR / "civicpulse.db"
 for directory in (IMAGE_DIR, AUDIO_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -37,6 +38,39 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_AUDIO_TYPES = {"audio/webm", "audio/wav", "audio/ogg", "audio/mpeg", "audio/mp4"}
+
+
+def get_db() -> sqlite3.Connection:
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def initialize_database() -> None:
+    with get_db() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT 'received',
+                name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                address TEXT NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                image_file TEXT,
+                audio_file TEXT,
+                audio_transcript TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+
+initialize_database()
 
 
 def safe_suffix(filename: str | None, content_type: str | None) -> str:
@@ -143,9 +177,30 @@ async def create_incident(
         "image_file": image_path.name if image_path else None,
         "audio_file": audio_path.name if audio_path else None,
         "audio_transcript": transcript,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    with get_db() as connection:
+        connection.execute(
+            """
+            INSERT INTO incidents (
+                ticket_id, status, name, phone, address, category, description,
+                latitude, longitude, image_file, audio_file, audio_transcript, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            tuple(record.values()),
+        )
     (UPLOAD_DIR / f"{ticket_id}.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
     return {"ok": True, **record}
+
+
+@app.get("/api/incidents")
+def list_incidents(limit: int = 25) -> dict[str, object]:
+    safe_limit = max(1, min(limit, 100))
+    with get_db() as connection:
+        rows = connection.execute(
+            "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ?", (safe_limit,)
+        ).fetchall()
+    return {"ok": True, "incidents": [dict(row) for row in rows]}
 
 
 @app.get("/api/health")

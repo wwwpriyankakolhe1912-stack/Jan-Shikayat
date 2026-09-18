@@ -27,3 +27,5 @@ Voice transcription is optional. `SpeechRecognition` returns a transcript when t
 4. Open the generated HTTPS URL. The health check is `/api/health`.
 
 The current upload folder is local to the server. For production, replace it with S3, Supabase Storage, or a persistent disk before storing important citizen media.
+
+Incident records are stored in the local SQLite database `civicpulse.db`. The API provides `GET /api/incidents?limit=25` for reading recent reports. A hosted deployment needs persistent disk or a managed database so records survive redeploys.
