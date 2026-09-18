@@ -58,14 +58,48 @@ body {
   gap: 10px;
 }
 
-.logo-pulse {
-  width: 14px;
-  height: 14px;
-  background-color: var(--google-blue);
-  border-radius: 50%;
-  box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.7);
-  animation: pulse 2s infinite;
+.jan-logo {
+  width: 30px;
+  height: 34px;
+  position: relative;
+  display: inline-block;
 }
+
+.jan-logo-pin {
+  width: 22px;
+  height: 27px;
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  background: var(--google-blue);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: var(--shadow-subtle);
+}
+
+.jan-logo-pin::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  position: absolute;
+  top: 9px;
+  left: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.jan-logo-node {
+  width: 6px;
+  height: 6px;
+  position: absolute;
+  border-radius: 50%;
+  background: var(--google-green);
+  border: 2px solid #ffffff;
+  z-index: 1;
+}
+
+.jan-logo-node-one { right: 0; top: 5px; }
+.jan-logo-node-two { right: 0; bottom: 4px; background: var(--google-yellow); }
 
 @keyframes pulse {
   0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.7); }

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: civicpulse
+    name: jan-samasya
     runtime: docker
     plan: free
     healthCheckPath: /api/health

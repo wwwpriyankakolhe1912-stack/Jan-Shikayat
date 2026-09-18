@@ -26,7 +26,7 @@ DATABASE_PATH = BASE_DIR / "civicpulse.db"
 for directory in (IMAGE_DIR, AUDIO_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="CivicPulse Input API", version="1.0.0")
+app = FastAPI(title="Jan Samasya Input API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

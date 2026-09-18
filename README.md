@@ -1,4 +1,4 @@
-# CivicPulse input API
+# Jan Samasya input API
 
 The app accepts three input modes:
 
