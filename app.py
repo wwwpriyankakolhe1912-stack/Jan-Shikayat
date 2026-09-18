@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 from PIL import Image, UnidentifiedImageError
+from dotenv import load_dotenv
 
 try:
     import speech_recognition as speech_recognition
@@ -21,6 +22,7 @@ except ImportError:
     speech_recognition = None
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 UPLOAD_DIR = BASE_DIR / "uploads"
 IMAGE_DIR = UPLOAD_DIR / "images"
 AUDIO_DIR = UPLOAD_DIR / "audio"

@@ -19,5 +19,16 @@ create table if not exists public.incidents (
 
 alter table public.incidents enable row level security;
 
+insert into storage.buckets (id, name, public)
+values
+  ('issue-audio', 'issue-audio', true),
+  ('issue-photos', 'issue-photos', true)
+on conflict (id) do update set public = excluded.public;
+
+create policy "Public media can be viewed"
+on storage.objects for select
+to public
+using (bucket_id in ('issue-audio', 'issue-photos'));
+
 -- The FastAPI server uses the Supabase service-role key server-side.
 -- Do not expose that key in browser code.

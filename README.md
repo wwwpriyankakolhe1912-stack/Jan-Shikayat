@@ -32,14 +32,16 @@ Incident records are stored in the local SQLite database `civicpulse.db`. Audio 
 
 ## Optional Supabase audio storage
 
-Create a public Supabase Storage bucket named `issue-audio`, then set these server-side environment variables:
+This project is configured for the Supabase project `sganafwxemitcilryxgc`. Create public Supabase Storage buckets named `issue-audio` and `issue-photos`, then copy `.env.example` to `.env` and replace the placeholder service key:
 
 ```powershell
-$env:SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+$env:SUPABASE_URL = "https://sganafwxemitcilryxgc.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY = "YOUR_SERVER_ONLY_SERVICE_ROLE_KEY"
 $env:SUPABASE_AUDIO_BUCKET = "issue-audio"
 $env:SUPABASE_IMAGE_BUCKET = "issue-photos"
 ```
+
+For local development, the same values can be placed in `.env`. For Render, add them in the service Environment settings. The Supabase dashboard URL alone cannot authenticate the backend; use the server-only `service_role` key from Supabase Project Settings > API.
 
 Also create the `incidents` table by running [supabase_schema.sql](supabase_schema.sql) in the Supabase SQL Editor. With those values configured, each report is inserted into Supabase, images go to `issue-photos`, voice notes go to `issue-audio`, and their URLs are saved in the `incidents` row. Never expose the service-role key in browser JavaScript. If the variables are absent or Supabase is unavailable, the app keeps the local files and uses SQLite fallback.
 

@@ -5,4 +5,5 @@ venv/
 uploads/
 civicpulse.db
 .env
+.env.local
 .vscode/
