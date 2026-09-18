@@ -6,4 +6,5 @@ uploads/
 civicpulse.db
 .env
 .env.local
+node_modules/
 .vscode/
