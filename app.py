@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import io
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from PIL import Image, UnidentifiedImageError
+
+try:
+    import speech_recognition as speech_recognition
+except ImportError:
+    speech_recognition = None
+
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = BASE_DIR / "uploads"
+IMAGE_DIR = UPLOAD_DIR / "images"
+AUDIO_DIR = UPLOAD_DIR / "audio"
+for directory in (IMAGE_DIR, AUDIO_DIR):
+    directory.mkdir(parents=True, exist_ok=True)
+
+app = FastAPI(title="CivicPulse Input API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_AUDIO_TYPES = {"audio/webm", "audio/wav", "audio/ogg", "audio/mpeg", "audio/mp4"}
+
+
+def safe_suffix(filename: str | None, content_type: str | None) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix:
+        return suffix[:10]
+    return {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "audio/webm": ".webm",
+        "audio/wav": ".wav",
+        "audio/ogg": ".ogg",
+        "audio/mpeg": ".mp3",
+        "audio/mp4": ".m4a",
+    }.get(content_type or "", ".bin")
+
+
+async def save_upload(upload: UploadFile, destination: Path, max_bytes: int) -> Path:
+    data = await upload.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError(f"{upload.filename or 'File'} is too large")
+    path = destination / f"{uuid.uuid4().hex}{safe_suffix(upload.filename, upload.content_type)}"
+    path.write_bytes(data)
+    return path
+
+
+async def validate_image(upload: UploadFile) -> Path:
+    if upload.content_type not in ALLOWED_IMAGE_TYPES:
+        raise ValueError("Image must be JPG, PNG, or WebP")
+    path = await save_upload(upload, IMAGE_DIR, MAX_IMAGE_BYTES)
+    try:
+        with Image.open(path) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError) as error:
+        path.unlink(missing_ok=True)
+        raise ValueError("The uploaded image is not valid") from error
+    return path
+
+
+async def save_audio(upload: UploadFile) -> Path:
+    if upload.content_type not in ALLOWED_AUDIO_TYPES:
+        raise ValueError("Audio must be WebM, WAV, OGG, MP3, or M4A")
+    return await save_upload(upload, AUDIO_DIR, MAX_AUDIO_BYTES)
+
+
+def transcribe_audio(path: Path) -> str | None:
+    if speech_recognition is None:
+        return None
+    recognizer = speech_recognition.Recognizer()
+    try:
+        with speech_recognition.AudioFile(str(path)) as source:
+            audio = recognizer.record(source)
+        return recognizer.recognize_google(audio)
+    except (speech_recognition.UnknownValueError, speech_recognition.RequestError, ValueError):
+        return None
+
+
+@app.get("/")
+def serve_app() -> FileResponse:
+    return FileResponse(BASE_DIR / "index.html")
+
+
+@app.post("/api/incidents")
+async def create_incident(
+    name: Annotated[str, Form()],
+    phone: Annotated[str, Form()],
+    address: Annotated[str, Form()],
+    category: Annotated[str, Form()],
+    description: Annotated[str, Form()] = "",
+    latitude: Annotated[float, Form()] = 26.2389,
+    longitude: Annotated[float, Form()] = 73.0243,
+    image: Annotated[UploadFile | None, File()] = None,
+    audio: Annotated[UploadFile | None, File()] = None,
+) -> dict[str, object]:
+    if not name.strip() or not phone.strip() or not address.strip():
+        return {"ok": False, "error": "Name, phone, and address are required"}
+    if not description.strip() and image is None and audio is None:
+        return {"ok": False, "error": "Add text, an audio note, or an image"}
+
+    image_path = None
+    audio_path = None
+    transcript = None
+    try:
+        if image is not None and image.filename:
+            image_path = await validate_image(image)
+        if audio is not None and audio.filename:
+            audio_path = await save_audio(audio)
+            transcript = transcribe_audio(audio_path)
+    except ValueError as error:
+        return {"ok": False, "error": str(error)}
+
+    ticket_id = f"CP-{datetime.now(timezone.utc):%y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+    record = {
+        "ticket_id": ticket_id,
+        "status": "received",
+        "name": name.strip(),
+        "phone": phone.strip(),
+        "address": address.strip(),
+        "category": category,
+        "description": description.strip(),
+        "latitude": latitude,
+        "longitude": longitude,
+        "image_file": image_path.name if image_path else None,
+        "audio_file": audio_path.name if audio_path else None,
+        "audio_transcript": transcript,
+    }
+    (UPLOAD_DIR / f"{ticket_id}.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+    return {"ok": True, **record}
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {"status": "ok", "service": "civicpulse-input-api"}
+
+
+app.mount("/", StaticFiles(directory=BASE_DIR, html=True), name="static")

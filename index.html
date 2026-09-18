@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CivicPulse - Public Infrastructure Issue Reporting</title>
+  
+  <!-- Google Fonts: Roboto -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="nav-left">
+      <div class="logo">
+        <span class="logo-pulse"></span>
+        <span class="logo-text">CivicPulse</span>
+      </div>
+      <span class="tagline" id="txt-tagline">Citizen Infrastructure Reporting</span>
+    </div>
+
+    <div class="nav-right">
+      <!-- Language Toggle Switch -->
+      <button class="lang-btn" id="langToggleBtn" onclick="toggleLanguage()">
+        <span id="langIcon">🌐</span>
+        <span id="langText">हिंदी में देखें</span>
+      </button>
+
+      <!-- User Profile Chip -->
+      <div class="profile-chip">
+        <div class="avatar">AR</div>
+        <div class="profile-info">
+          <span class="user-name" id="profileName">Alex Rivera</span>
+          <span class="user-loc" id="profileLoc">Jodhpur, RJ</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Step 1: User Contact Information Card -->
+    <section class="card">
+      <div class="card-header">
+        <div class="step-badge">1</div>
+        <div>
+          <h2 id="title-user-info">Your Contact Details</h2>
+          <p class="card-sub" id="sub-user-info">Enter your information so authorities can update you on resolution</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label id="lbl-name">Full Name *</label>
+          <input type="text" id="inputName" class="form-control" value="Alex Rivera" placeholder="Enter your full name">
+        </div>
+
+        <div class="form-group">
+          <label id="lbl-phone">Phone Number (+91) *</label>
+          <input type="tel" id="inputPhone" class="form-control" value="+91 98765 43210" placeholder="Enter 10-digit mobile number">
+        </div>
+
+        <div class="form-group full-width">
+          <label id="lbl-address">Location / Address Details *</label>
+          <div class="input-with-btn">
+            <input type="text" id="inputAddress" class="form-control" value="Main Road, Near Shastri Circle, Ward 101, Jodhpur" placeholder="Street address or landmark">
+            <button class="btn btn-secondary" onclick="detectUserLocation()">
+              📍 <span id="btn-detect-loc">Detect My Location</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 2: Problem Category Selection -->
+    <section class="card">
+      <div class="card-header">
+        <div class="step-badge">2</div>
+        <div>
+          <h2 id="title-category">Select Problem Category</h2>
+          <p class="card-sub" id="sub-category">What type of public infrastructure needs repair or attention?</p>
+        </div>
+      </div>
+
+      <div class="category-grid">
+        <!-- Category 1: Civil / Roads -->
+        <div class="cat-card active" onclick="selectCategory('roads', this)">
+          <div class="cat-icon roads">🛠️</div>
+          <div class="cat-content">
+            <h3 id="cat-roads-title">Civil / Roads & Potholes</h3>
+            <p id="cat-roads-desc">Potholes, broken asphalt, damaged pavements, open manholes, footpaths</p>
+          </div>
+          <div class="cat-check">✓</div>
+        </div>
+
+        <!-- Category 2: Electrical -->
+        <div class="cat-card" onclick="selectCategory('electrical', this)">
+          <div class="cat-icon electrical">⚡</div>
+          <div class="cat-content">
+            <h3 id="cat-elec-title">Electrical & Lighting</h3>
+            <p id="cat-elec-desc">Non-functional streetlights, hanging dangerous wires, damaged transformers</p>
+          </div>
+          <div class="cat-check">✓</div>
+        </div>
+
+        <!-- Category 3: Sanitation -->
+        <div class="cat-card" onclick="selectCategory('sanitation', this)">
+          <div class="cat-icon sanitation">🧹</div>
+          <div class="cat-content">
+            <h3 id="cat-sanitation-title">Sanitation & Garbage</h3>
+            <p id="cat-sanitation-desc">Overflowing garbage dumps, uncleaned waste, sewer leaks, drainage blockage</p>
+          </div>
+          <div class="cat-check">✓</div>
+        </div>
+
+        <!-- Category 4: Public Infra -->
+        <div class="cat-card" onclick="selectCategory('infra', this)">
+          <div class="cat-icon infra">🏗️</div>
+          <div class="cat-content">
+            <h3 id="cat-infra-title">Public Infrastructure</h3>
+            <p id="cat-infra-desc">Damaged bus stands, broken public park benches, leaking public water pipes</p>
+          </div>
+          <div class="cat-check">✓</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Interactive Location Map -->
+    <section class="card">
+      <div class="card-header">
+        <div class="step-badge">3</div>
+        <div class="header-flex">
+          <div>
+            <h2 id="title-map">Pin Exact Problem Location</h2>
+            <p class="card-sub" id="sub-map">Drag the red map pin directly over the damaged area</p>
+          </div>
+          <div class="ward-badge">
+            <span id="lbl-ward-title">Ward Detected:</span>
+            <strong id="wardBadgeName">Ward 101 - Shastri Nagar</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="map-wrapper">
+        <div id="map"></div>
+        <button class="map-gps-btn" onclick="detectUserLocation()" title="Fly to GPS Location">🎯</button>
+      </div>
+    </section>
+
+    <!-- Step 4: Problem Details (3 Distinct Modes) -->
+    <section class="card">
+      <div class="card-header">
+        <div class="step-badge">4</div>
+        <div>
+          <h2 id="title-describe">Describe & Attach Evidence</h2>
+          <p class="card-sub" id="sub-describe">Use any or all of the 3 modes below to explain the issue</p>
+        </div>
+      </div>
+
+      <div class="input-methods-wrapper">
+
+        <!-- Mode A: Text Description -->
+        <div class="method-box">
+          <div class="method-header">
+            <div class="method-icon blue">📝</div>
+            <div>
+              <h3 id="mode-text-title">1. Write Text Description</h3>
+              <p class="method-sub" id="mode-text-sub">Provide written details, landmarks, or severity</p>
+            </div>
+          </div>
+          <textarea id="textDescription" class="form-control" rows="4" placeholder="Describe the problem in detail (e.g., Deep pothole near the main crossing causing traffic hazard)..."></textarea>
+        </div>
+
+        <!-- Mode B: Voice Recording -->
+        <div class="method-box">
+          <div class="method-header">
+            <div class="method-icon red">🎙️</div>
+            <div>
+              <h3 id="mode-voice-title">2. Record Audio Voice Note</h3>
+              <p class="method-sub" id="mode-voice-sub">Speak your complaint into your microphone</p>
+            </div>
+          </div>
+
+          <div class="voice-controls">
+            <button class="record-btn" id="recordBtn" onclick="toggleVoiceRecording()">
+              <div class="record-dot"></div>
+            </button>
+            <div class="voice-status">
+              <span class="timer-display" id="voiceTimer">00:00</span>
+              <span class="recording-state-label" id="voiceStatusLabel">Click button to start recording</span>
+            </div>
+          </div>
+
+          <canvas id="waveformCanvas" width="400" height="40"></canvas>
+
+          <div id="audioPlaybackContainer" class="audio-preview-box" style="display: none;">
+            <audio id="audioPreview" controls></audio>
+            <button class="btn btn-danger-sm" onclick="clearAudioNote()">🗑️</button>
+          </div>
+
+          <div id="voiceTranscriptBox" class="transcript-box" style="display: none;">
+            <strong>Transcript:</strong> <span id="transcriptText"></span>
+          </div>
+        </div>
+
+        <!-- Mode C: Photo Capture / Upload -->
+        <div class="method-box">
+          <div class="method-header">
+            <div class="method-icon green">📷</div>
+            <div>
+              <h3 id="mode-photo-title">3. Take Photo or Upload Image</h3>
+              <p class="method-sub" id="mode-photo-sub">Capture live photo using camera or upload file</p>
+            </div>
+          </div>
+
+          <div class="photo-actions-grid">
+            <!-- Live WebCam Box -->
+            <div class="camera-card">
+              <video id="webcamVideo" autoplay playsinline muted></video>
+              <canvas id="photoCanvas" style="display: none;"></canvas>
+              <div class="camera-buttons">
+                <button class="btn btn-secondary" id="btnStartCamera" onclick="startWebcam()">🎥 <span id="txt-start-cam">Open Camera</span></button>
+                <button class="btn btn-primary" id="btnSnapPhoto" onclick="capturePhoto()" style="display: none;">📸 <span id="txt-snap-photo">Snap Photo</span></button>
+              </div>
+            </div>
+
+            <!-- Upload Dropzone -->
+            <div class="dropzone" id="imageDropzone" onclick="document.getElementById('fileInput').click()">
+              <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+              <div class="drop-icon">📁</div>
+              <p id="txt-dropzone">Click or Drag & Drop photo here</p>
+              <small id="txt-dropzone-sub">PNG, JPG up to 10MB</small>
+            </div>
+          </div>
+
+          <!-- Photo Preview Area -->
+          <div id="photoPreviewCard" class="photo-preview-container" style="display: none;">
+            <img id="photoPreviewImg" src="" alt="Captured issue">
+            <div class="photo-meta">
+              <span class="badge badge-success" id="photoMetaTag">Photo Ready</span>
+              <button class="btn btn-danger-sm" onclick="removePhoto()">Remove Photo</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Submit Action Button -->
+      <div class="submit-bar">
+        <button class="btn btn-submit" onclick="submitTicket()">
+          🚀 <span id="btn-submit-text">Submit Infrastructure Complaint</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Public Live Complaints Stream & Upvoting -->
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 id="title-recent">Recent Reported Issues in Jodhpur</h2>
+          <p class="card-sub" id="sub-recent">Community issues submitted by citizens in nearby wards</p>
+        </div>
+      </div>
+
+      <div class="tickets-feed" id="ticketsFeed">
+        <!-- Dynamic Ticket Cards Rendered Here via JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Submission Confirmation Modal -->
+  <div class="modal-backdrop" id="confirmationModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="success-icon">✅</div>
+        <h2 id="modal-success-title">Complaint Registered Successfully!</h2>
+      </div>
+      <div class="modal-body">
+        <div class="ticket-id-badge">
+          <span>TICKET ID:</span>
+          <strong id="modalTicketId">CP-892401</strong>
+        </div>
+        
+        <p class="modal-msg" id="modalMsg">Your report has been dispatched to the Municipal Corporation maintenance desk.</p>
+
+        <div class="modal-details">
+          <div class="detail-row"><span id="lbl-mod-cat">Category:</span> <strong id="modalCat">Civil / Roads</strong></div>
+          <div class="detail-row"><span id="lbl-mod-ward">Assigned Ward:</span> <strong id="modalWard">Ward 101 - Shastri Nagar</strong></div>
+          <div class="detail-row"><span id="lbl-mod-est">Estimated Dispatch:</span> <strong>24 - 48 Hours</strong></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeModal()">OK, Got It</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Custom JS -->
+  <script src="script.js"></script>
+</body>
+</html>
