@@ -5,3 +5,12 @@ services:
     plan: free
     healthCheckPath: /api/health
     autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_AUDIO_BUCKET
+        value: issue-audio
+      - key: SUPABASE_IMAGE_BUCKET
+        value: issue-photos

@@ -28,6 +28,7 @@ DATABASE_PATH = BASE_DIR / "civicpulse.db"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_AUDIO_BUCKET = os.getenv("SUPABASE_AUDIO_BUCKET", "issue-audio")
+SUPABASE_IMAGE_BUCKET = os.getenv("SUPABASE_IMAGE_BUCKET", "issue-photos")
 for directory in (IMAGE_DIR, AUDIO_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -67,6 +68,7 @@ def initialize_database() -> None:
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
                 image_file TEXT,
+                image_url TEXT,
                 audio_file TEXT,
                 audio_url TEXT,
                 audio_transcript TEXT,
@@ -77,6 +79,8 @@ def initialize_database() -> None:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(incidents)")}
         if "audio_url" not in columns:
             connection.execute("ALTER TABLE incidents ADD COLUMN audio_url TEXT")
+        if "image_url" not in columns:
+            connection.execute("ALTER TABLE incidents ADD COLUMN image_url TEXT")
 
 
 initialize_database()
@@ -129,23 +133,6 @@ async def save_audio(upload: UploadFile) -> Path:
 def transcribe_audio(path: Path) -> str | None:
     if speech_recognition is None:
         return None
-
-
-async def upload_audio_to_supabase(path: Path) -> str | None:
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        return None
-    object_path = f"{datetime.now(timezone.utc):%Y/%m}/{uuid.uuid4().hex}{path.suffix}"
-    endpoint = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_AUDIO_BUCKET}/{object_path}"
-    headers = {
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Content-Type": "audio/webm",
-        "x-upsert": "false",
-    }
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(endpoint, content=path.read_bytes(), headers=headers)
-        response.raise_for_status()
-    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_AUDIO_BUCKET}/{object_path}"
     recognizer = speech_recognition.Recognizer()
     try:
         with speech_recognition.AudioFile(str(path)) as source:
@@ -153,6 +140,41 @@ async def upload_audio_to_supabase(path: Path) -> str | None:
         return recognizer.recognize_google(audio)
     except (speech_recognition.UnknownValueError, speech_recognition.RequestError, ValueError):
         return None
+
+
+async def upload_to_supabase(path: Path, bucket: str, content_type: str) -> str | None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    object_path = f"{datetime.now(timezone.utc):%Y/%m}/{uuid.uuid4().hex}{path.suffix}"
+    endpoint = f"{SUPABASE_URL}/storage/v1/object/{bucket}/{object_path}"
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": content_type,
+        "x-upsert": "false",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(endpoint, content=path.read_bytes(), headers=headers)
+        response.raise_for_status()
+    return f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{object_path}"
+
+
+async def insert_supabase_incident(record: dict[str, object]) -> None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            f"{SUPABASE_URL}/rest/v1/incidents",
+            json=record,
+            headers=headers,
+        )
+        response.raise_for_status()
 
 
 @app.get("/")
@@ -179,16 +201,25 @@ async def create_incident(
 
     image_path = None
     audio_path = None
+    image_url = None
     audio_url = None
     transcript = None
     try:
         if image is not None and image.filename:
             image_path = await validate_image(image)
+            try:
+                image_url = await upload_to_supabase(
+                    image_path, SUPABASE_IMAGE_BUCKET, image.content_type or "image/jpeg"
+                )
+            except httpx.HTTPError:
+                image_url = None
         if audio is not None and audio.filename:
             audio_path = await save_audio(audio)
             transcript = transcribe_audio(audio_path)
             try:
-                audio_url = await upload_audio_to_supabase(audio_path)
+                audio_url = await upload_to_supabase(
+                    audio_path, SUPABASE_AUDIO_BUCKET, audio.content_type or "audio/webm"
+                )
             except httpx.HTTPError:
                 audio_url = None
     except ValueError as error:
@@ -206,6 +237,7 @@ async def create_incident(
         "latitude": latitude,
         "longitude": longitude,
         "image_file": image_path.name if image_path else None,
+        "image_url": image_url,
         "audio_file": audio_path.name if audio_path else None,
         "audio_url": audio_url,
         "audio_transcript": transcript,
@@ -216,13 +248,19 @@ async def create_incident(
             """
             INSERT INTO incidents (
                 ticket_id, status, name, phone, address, category, description,
-                latitude, longitude, image_file, audio_file, audio_url, audio_transcript, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                latitude, longitude, image_file, image_url, audio_file, audio_url,
+                audio_transcript, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             tuple(record.values()),
         )
+    try:
+        await insert_supabase_incident(record)
+        storage_mode = "supabase" if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY else "local"
+    except httpx.HTTPError:
+        storage_mode = "local-fallback"
     (UPLOAD_DIR / f"{ticket_id}.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
-    return {"ok": True, **record}
+    return {"ok": True, "storage_mode": storage_mode, **record}
 
 
 @app.get("/api/incidents")

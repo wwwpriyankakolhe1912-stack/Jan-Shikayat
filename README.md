@@ -38,8 +38,9 @@ Create a public Supabase Storage bucket named `issue-audio`, then set these serv
 $env:SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY = "YOUR_SERVER_ONLY_SERVICE_ROLE_KEY"
 $env:SUPABASE_AUDIO_BUCKET = "issue-audio"
+$env:SUPABASE_IMAGE_BUCKET = "issue-photos"
 ```
 
-With those values configured, each uploaded voice note is sent to Supabase Storage and the resulting `audio_url` is saved in SQLite. Never expose the service-role key in browser JavaScript. If the variables are absent or Supabase is unavailable, the app keeps the local audio file and leaves `audio_url` empty.
+Also create the `incidents` table by running [supabase_schema.sql](supabase_schema.sql) in the Supabase SQL Editor. With those values configured, each report is inserted into Supabase, images go to `issue-photos`, voice notes go to `issue-audio`, and their URLs are saved in the `incidents` row. Never expose the service-role key in browser JavaScript. If the variables are absent or Supabase is unavailable, the app keeps the local files and uses SQLite fallback.
 
 A hosted deployment needs persistent disk or a managed database so local records survive redeploys.
