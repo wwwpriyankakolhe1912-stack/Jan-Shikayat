@@ -32,10 +32,10 @@ Incident records are stored in the local SQLite database `civicpulse.db`. Audio 
 
 ## Optional Supabase audio storage
 
-This project is configured for the Supabase project `sganafwxemitcilryxgc`. Create public Supabase Storage buckets named `issue-audio` and `issue-photos`, then copy `.env.example` to `.env` and replace the placeholder service key:
+This project is configured for the Supabase project `yceqxowlpllgszolebrm`. Create public Supabase Storage buckets named `issue-audio` and `issue-photos`, then copy `.env.example` to `.env` and replace the placeholder service key:
 
 ```powershell
-$env:SUPABASE_URL = "https://sganafwxemitcilryxgc.supabase.co"
+$env:SUPABASE_URL = "https://yceqxowlpllgszolebrm.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY = "YOUR_SERVER_ONLY_SERVICE_ROLE_KEY"
 $env:BACKEND_API_KEY = "YOUR_BACKEND_API_KEY"
 $env:SUPABASE_AUDIO_BUCKET = "issue-audio"

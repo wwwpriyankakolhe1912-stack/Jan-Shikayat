@@ -7,7 +7,7 @@ services:
     autoDeploy: true
     envVars:
       - key: SUPABASE_URL
-        sync: false
+        value: https://yceqxowlpllgszolebrm.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: BACKEND_API_KEY

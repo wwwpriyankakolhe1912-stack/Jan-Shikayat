@@ -223,18 +223,46 @@ async function updateAddressFromCoordinates(lat, lng) {
 
 // Detect GPS Location
 function detectUserLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      userLat = pos.coords.latitude;
-      userLng = pos.coords.longitude;
-      map.flyTo([userLat, userLng], 15);
-      marker.setLatLng([userLat, userLng]);
-      checkPointInWard(userLat, userLng);
-      updateAddressFromCoordinates(userLat, userLng);
-    }, () => {
-      alert("GPS location access denied or unavailable.");
-    });
+  if (!navigator.geolocation) {
+    alert("Location is not supported by this browser.");
+    return;
   }
+
+  const updateLocation = (pos) => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+    map.flyTo([userLat, userLng], 15);
+    marker.setLatLng([userLat, userLng]);
+    checkPointInWard(userLat, userLng);
+    updateAddressFromCoordinates(userLat, userLng);
+  };
+
+  const showLocationError = (error) => {
+    const messages = {
+      1: "Location permission was denied. Allow location access in your browser settings and try again.",
+      2: "Your device could not determine the location. Turn on GPS/location services and try again.",
+      3: "Location detection timed out. Move somewhere with a clearer GPS signal and try again."
+    };
+    alert(messages[error.code] || "Unable to detect your location.");
+  };
+
+  const retryWithLowAccuracy = (error) => {
+    if (error.code === 3) {
+      navigator.geolocation.getCurrentPosition(updateLocation, showLocationError, {
+        enableHighAccuracy: false,
+        timeout: 20000,
+        maximumAge: 60000
+      });
+      return;
+    }
+    showLocationError(error);
+  };
+
+  navigator.geolocation.getCurrentPosition(updateLocation, retryWithLowAccuracy, {
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 0
+  });
 }
 
 // Toggle Language (English ↔ Hindi)
