@@ -167,6 +167,7 @@ function initMap() {
     userLat = coord.lat;
     userLng = coord.lng;
     checkPointInWard(userLat, userLng);
+    updateAddressFromCoordinates(userLat, userLng);
   });
 
   map.on('click', function(e) {
@@ -174,6 +175,7 @@ function initMap() {
     userLng = e.latlng.lng;
     marker.setLatLng(e.latlng);
     checkPointInWard(userLat, userLng);
+    updateAddressFromCoordinates(userLat, userLng);
   });
 }
 
@@ -200,6 +202,25 @@ function checkPointInWard(lat, lng) {
   document.getElementById('wardBadgeName').innerText = foundWard;
 }
 
+async function updateAddressFromCoordinates(lat, lng) {
+  const addressInput = document.getElementById('inputAddress');
+  addressInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`
+    );
+    if (!response.ok) return;
+
+    const result = await response.json();
+    if (result.display_name) {
+      addressInput.value = result.display_name;
+    }
+  } catch (error) {
+    return;
+  }
+}
+
 // Detect GPS Location
 function detectUserLocation() {
   if (navigator.geolocation) {
@@ -209,6 +230,7 @@ function detectUserLocation() {
       map.flyTo([userLat, userLng], 15);
       marker.setLatLng([userLat, userLng]);
       checkPointInWard(userLat, userLng);
+      updateAddressFromCoordinates(userLat, userLng);
     }, () => {
       alert("GPS location access denied or unavailable.");
     });
