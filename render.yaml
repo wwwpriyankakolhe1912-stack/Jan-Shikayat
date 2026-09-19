@@ -10,6 +10,8 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: BACKEND_API_KEY
+        sync: false
       - key: SUPABASE_AUDIO_BUCKET
         value: issue-audio
       - key: SUPABASE_IMAGE_BUCKET

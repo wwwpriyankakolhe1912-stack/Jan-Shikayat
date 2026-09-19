@@ -387,7 +387,13 @@ function startWaveformVisualizer() {
 // Camera & Photo Upload Functions
 async function startWebcam() {
   try {
-    webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    try {
+      webcamStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
+    } catch (cameraError) {
+      webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
     document.getElementById('webcamVideo').srcObject = webcamStream;
     document.getElementById('btnStartCamera').style.display = 'none';
     document.getElementById('btnSnapPhoto').style.display = 'inline-flex';
@@ -404,6 +410,22 @@ function capturePhoto() {
 
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const address = document.getElementById('inputAddress').value.trim();
+  const locationText = address || `${userLat.toFixed(6)}, ${userLng.toFixed(6)}`;
+  const padding = Math.max(10, canvas.width * 0.02);
+  const fontSize = Math.max(14, Math.round(canvas.width * 0.025));
+  ctx.font = `${fontSize}px Arial`;
+  const maxTextWidth = canvas.width - padding * 2;
+  let displayLocation = `Location: ${locationText}`;
+  while (ctx.measureText(displayLocation).width > maxTextWidth && displayLocation.length > 20) {
+    displayLocation = `${displayLocation.slice(0, -4)}...`;
+  }
+  const bannerHeight = fontSize + padding * 2;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(displayLocation, padding, canvas.height - padding);
 
   canvas.toBlob((blob) => {
     selectedImageFile = new File([blob], 'camera-capture.png', { type: 'image/png' });

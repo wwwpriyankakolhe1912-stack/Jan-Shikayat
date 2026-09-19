@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Any, Annotated
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +30,7 @@ AUDIO_DIR = UPLOAD_DIR / "audio"
 DATABASE_PATH = BASE_DIR / "civicpulse.db"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
 SUPABASE_AUDIO_BUCKET = os.getenv("SUPABASE_AUDIO_BUCKET", "issue-audio")
 SUPABASE_IMAGE_BUCKET = os.getenv("SUPABASE_IMAGE_BUCKET", "issue-photos")
 for directory in (IMAGE_DIR, AUDIO_DIR):
@@ -46,6 +48,13 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_AUDIO_TYPES = {"audio/webm", "audio/wav", "audio/ogg", "audio/mpeg", "audio/mp4"}
+
+
+def verify_backend_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    if not BACKEND_API_KEY:
+        raise HTTPException(status_code=503, detail="Backend API key is not configured")
+    if not x_api_key or not secrets.compare_digest(x_api_key, BACKEND_API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 def get_db() -> sqlite3.Connection:
@@ -135,7 +144,7 @@ async def save_audio(upload: UploadFile) -> Path:
 def transcribe_audio(path: Path) -> str | None:
     if speech_recognition is None:
         return None
-    recognizer = speech_recognition.Recognizer()
+    recognizer: Any = speech_recognition.Recognizer()
     try:
         with speech_recognition.AudioFile(str(path)) as source:
             audio = recognizer.record(source)
@@ -195,6 +204,7 @@ async def create_incident(
     longitude: Annotated[float, Form()] = 73.0243,
     image: Annotated[UploadFile | None, File()] = None,
     audio: Annotated[UploadFile | None, File()] = None,
+    _: None = Depends(verify_backend_api_key),
 ) -> dict[str, object]:
     if not name.strip() or not phone.strip() or not address.strip():
         return {"ok": False, "error": "Name, phone, and address are required"}
@@ -266,7 +276,9 @@ async def create_incident(
 
 
 @app.get("/api/incidents")
-def list_incidents(limit: int = 25) -> dict[str, object]:
+def list_incidents(
+    limit: int = 25, _: None = Depends(verify_backend_api_key)
+) -> dict[str, object]:
     safe_limit = max(1, min(limit, 100))
     with get_db() as connection:
         rows = connection.execute(
