@@ -143,10 +143,10 @@ document.addEventListener("DOMContentLoaded", () => {
 function initMap() {
   map = L.map('map').setView([userLat, userLng], 14);
 
-  // Google Maps Style Canvas Layer
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  // OpenStreetMap tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
+    attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
   // Render Ward Polygons
@@ -160,7 +160,14 @@ function initMap() {
   });
 
   // Draggable Marker Pin
-  marker = L.marker([userLat, userLng], { draggable: true }).addTo(map);
+  marker = L.marker([userLat, userLng], { draggable: true })
+    .addTo(map)
+    .bindTooltip('Selected problem location');
+
+  map.whenReady(() => {
+    setTimeout(() => map.invalidateSize(), 100);
+  });
+  window.addEventListener('resize', () => map.invalidateSize());
 
   marker.on('dragend', function (e) {
     const coord = e.target.getLatLng();
